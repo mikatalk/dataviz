@@ -92,9 +92,9 @@ vec3 pos = position * vec3(uvScales.xy, 1.0);//*1024.0;
         // vPosition = vcV * ( 2.0 * orientation.w ) + ( cross( orientation.xyz, vcV ) * 2.0 + vPosition );
 vPosition = pos + offset;
 
+vUv = (uv * uvScales + uvOffsets)  / 1024.0;
 
-vUv = uvOffsets / 1024.0;
-vUv += (uvScales / uv);
+
 // vUv += (uv *1024.0 / uvScales)/1024.0;
 
 
@@ -179,7 +179,7 @@ varying vec2 vUv;
       canvasPacked.height = 1024
       const contextPacked = canvasPacked.getContext('2d')
       contextPacked.strokeStyle = 'red'
-      contextPacked.lineWidth = 3
+      contextPacked.lineWidth = 1
       // contextPacked.fillStyle = 'white'
 
       let i = 0
