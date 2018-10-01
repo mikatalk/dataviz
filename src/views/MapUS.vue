@@ -257,39 +257,17 @@ varying vec2 vUv;
         }
       })
 
-
-			var vector = new THREE.Vector4();
-
 			var instances = blocks.length;
 
-			// // var positions = [];
-			var offsets = [];
 			var offsets = [];
 			var uvOffsets = [];
 			var uvScales = [];
-			// var uvMaps = []; // uvOffsetX, uvOffsetY
-			// var colors = [];
-			// var orientationsStart = [];
-			// var orientationsEnd = [];
-
-			// // positions.push( 0.025, -0.025, 0 );
-			// // positions.push( -0.025, 0.025, 0 );
-			// // positions.push( 0, 0, 0.025 );
-
-			// // instanced attributes
-
-			// for ( var i = 0; i < instances; i ++ ) {
 			for (let block of blocks) {
-// console.log('BLOCK', block)
-			// 	// offsets
 
-				offsets.push( 
+        offsets.push( 
           block.x - 500 + block.w/2,
           -(block.y - 350 + block.h/2),
           0
-          // (Math.random() - 0.5) * 5,
-          // (Math.random() - 0.5) * 5,
-          // (Math.random() - 0.5) * 5,
         )
         uvOffsets.push(
           block.fit.x,
@@ -298,67 +276,24 @@ varying vec2 vUv;
         uvScales.push(
 					block.w,
 					block.h
-          // 10, 10
-          // 1 / 1024 * block.fit.w,
-          // 1 / 1024 * block.fit.h
         )
-
-			// 	// colors
-
-			// 	colors.push( Math.random(), Math.random(), Math.random(), Math.random() );
-
-			// 	// orientation start
-
-			// 	vector.set( Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1 );
-			// 	vector.normalize();
-
-			// 	orientationsStart.push( vector.x, vector.y, vector.z, vector.w );
-
-			// 	// orientation end
-
-				// vector.set( Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1 );
-				// vector.normalize();
-
-				// orientationsEnd.push( vector.x, vector.y, vector.z, vector.w );
-
 			}
 
 			var geometry = new THREE.InstancedBufferGeometry()
 			geometry.copy( new THREE.PlaneBufferGeometry(1, 1, 1, 1))
 	
-      // var geometry = new THREE.InstancedBufferGeometry();
-      // const planeGeo = new THREE.PlaneBufferGeometry();
-      // const geometry = new THREE.PlaneB
 			geometry.maxInstancedCount = instances; // set so its initalized for dat.GUI, will be set in first draw otherwise
-
-			// geometry.addAttribute( 'position', new THREE.Float32BufferAttribute( positions, 3 ) );
 
 			geometry.addAttribute( 'offset', new THREE.InstancedBufferAttribute( new Float32Array( offsets ), 3 ) );
 			geometry.addAttribute( 'uvOffsets', new THREE.InstancedBufferAttribute( new Float32Array( uvOffsets ), 2 ) );
 			geometry.addAttribute( 'uvScales', new THREE.InstancedBufferAttribute( new Float32Array( uvScales ), 2 ) );
-			// geometry.addAttribute( 'color', new THREE.InstancedBufferAttribute( new Float32Array( colors ), 4 ) );
-			// geometry.addAttribute( 'orientationStart', new THREE.InstancedBufferAttribute( new Float32Array( orientationsStart ), 4 ) );
-			// geometry.addAttribute( 'orientationEnd', new THREE.InstancedBufferAttribute( new Float32Array( orientationsEnd ), 4 ) );
-// console.log('plane geo:', planeGeo)
-// 		  geometry.addAttribute( 'position', planeGeo.attributes.position )
-// 		  geometry.addAttribute( 'uv', planeGeo.attributes.uv )
-// 		  geometry.addAttribute( 'normal', planeGeo.attributes.normal )
-// // geometry.computeVertex()
-      // var uvs = new THREE.InterleavedBufferAttribute( vertexBuffer, 2, 4 );
-		  // geometry.addAttribute( 'uv', uvs );
-
-			// material
-
-var canvasTexture = new THREE.CanvasTexture(this.$refs['packed-counties-canvas'])
-// canvasTexture.minFil
-// texture1.anisotropy = maxAnisotropy;
-canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
-canvasTexture.repeat.set(1024, 1024)
+      var canvasTexture = new THREE.CanvasTexture(this.$refs['packed-counties-canvas'])
+      canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
+      canvasTexture.repeat.set(1024, 1024)
 
 			var material = new THREE.RawShaderMaterial( {
-
 				uniforms: {
-  				map: { value: canvasTexture },
+          map: { value: canvasTexture },
 					time: { value: 1.0 },
 					sineTime: { value: 1.0 }
 				},
@@ -376,20 +311,6 @@ canvasTexture.repeat.set(1024, 1024)
 			var mesh = new THREE.Mesh( geometry, material );
 			scene.add( mesh );
 
-			//
-
-					//
-
-			// var gui = new dat.GUI( { width: 350 } );
-			// gui.add( geometry, 'maxInstancedCount', 0, instances );
-
-			//
-
-			// stats = new Stats();
-			// container.appendChild( stats.dom );
-
-			//
-
 			window.addEventListener( 'resize', onWindowResize, false );
 
 		}
@@ -403,15 +324,11 @@ canvasTexture.repeat.set(1024, 1024)
 render()
 		}
 
-		//
-
 		const animate = () => {
 
 			// requestAnimationFrame( animate );
 
 			render();
-			// stats.update();
-
 		}
 
 		const render = () => {
