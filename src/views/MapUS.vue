@@ -64,6 +64,7 @@ export default {
 
       uniform float sineTime;
 
+      uniform float time;
       uniform mat4 modelViewMatrix;
       uniform mat4 projectionMatrix;
 
@@ -91,7 +92,7 @@ vec3 pos = position * vec3(uvScales.xy, 1.0);//*1024.0;
         // vec3 vcV = cross( orientation.xyz, vPosition );
         // vPosition = vcV * ( 2.0 * orientation.w ) + ( cross( orientation.xyz, vcV ) * 2.0 + vPosition );
 vPosition = pos + offset;
-
+vPosition.z += sin(time + length(vPosition.xy)) * 10.0;
 vUv = (uv * uvScales + uvOffsets)  / 1024.0;
 
 
@@ -326,7 +327,7 @@ render()
 
 		const animate = () => {
 
-			// requestAnimationFrame( animate );
+			requestAnimationFrame( animate );
 
 			render();
 		}
@@ -339,7 +340,7 @@ render()
 
 			// object.rotation.y = time * 0.0005;
 			object.material.uniforms.time.value = time * 0.005;
-			object.material.uniforms.sineTime.value = Math.sin( object.material.uniforms.time.value * 0.05 );
+			// object.material.uniforms.sineTime.value = Math.sin( object.material.uniforms.time.value * 0.05 );
 
 			renderer.render( scene, camera );
 
