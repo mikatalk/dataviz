@@ -48,7 +48,7 @@
 
     <h4>Upload to the GPU</h4>
     <p>Each county is mapped to an instanced 3d plane geometry with the right uv map.</p>
-      
+    <h4 class="county-label">{{currentCounty}}</h4>
     <canvas
       class="counties-webgl-canvas"
       ref="counties-webgl-canvas"
@@ -61,6 +61,7 @@
 
 import * as d3 from "d3";
 import * as topojson from 'topojson'
+import names from '@/data/county-names.json'
 import us from '@/data/us-10m.v1.json'
 import GrowingPacker from '@/utils/GrowingPacker'
 import * as THREE from 'three'
@@ -94,10 +95,12 @@ export default {
       varying float vCountyIndex;
 
       void main(){
+        vCountyIndex = countyIndex;
         vec3 pos = position * vec3(uvScales.xy * 1024.0, 1.0);
- vCountyIndex = countyIndex;
+        // pos *= (sin(time*0.6 + offset.x + offset.y) * 2.0)-1.0;
         pos = pos + offset;
         // pos.z += sin(time*0.6 + offset.x + offset.y) * 30.0;
+        
         vUv = vec2(uv.x, 1.0-uv.y);
         vUv *= uvScales;
         vUv = vec2(vUv.x, 1.0-vUv.y);
@@ -112,23 +115,46 @@ export default {
       // varying vec3 vPosition;
       varying float vCountyIndex;
       uniform sampler2D map;
+      uniform float isPicking;
       varying vec2 vUv;
+      
+vec4 packInt( float c )
+{	
+  // float alpha = c/(256.0*256.0*256.0) / 256.0;
+  
+  float red = mod(c/(256.0*256.0), 256.0) / 256.0;
+  float green = mod((c/256.0), 256.0) / 256.0;
+  float blue = mod(c, 256.0) / 256.0;
+  return vec4(red, green, blue, 1.0);
+}
+
+
       void main() {
         vec4 color = texture2D(map, vUv);
         if (color.x + color.y + color.z < 0.9) {
           discard;
         }
-        color.r = sin(time+vCountyIndex) * 0.5 + 0.5;
-        color.g = sin(time*0.7+vCountyIndex) * 0.5 + 0.5;
-        color.b = sin(time*.43+vCountyIndex) * 0.5 + 0.5;
-
-        gl_FragColor = color;
+        if (isPicking == 1.0) {
+          vec4 c = packInt(vCountyIndex);
+          gl_FragColor = c;
+           //vec4(c);//vec4( 1.0, vCountyIndex, 1.0, 1.0 );
+        } else {
+          color.r = sin(time+vCountyIndex) * 0.5 + 0.5;
+          color.g = sin(time*0.7+vCountyIndex) * 0.5 + 0.5;
+          color.b = sin(time*.43+vCountyIndex) * 0.5 + 0.5;
+          gl_FragColor = color;
+        }
       }
     `,
     counties: [],
     // inactivityTimeout: 10000,
     canvasWidth: 960,
-    canvasHeight: 600
+    canvasHeight: 600,
+    mouse: {
+      x:0,
+      y:0
+    },
+    currentCounty: null
   }),
   mounted () {
     this.createD3Map()
@@ -229,13 +255,35 @@ export default {
         i++
       }
       this.counties.push(...blocks)
-      // console.log({blocks})
+      // let min = Infinity
+      // let atMin
+      // let max = -Infinity
+      // let atMax
+      // for(let block of blocks) {
+      //   if(block.id > max) {
+      //     atMax = block
+      //     max = block.id
+      //   }
+      //   if(block.id < min) {
+      //     atMin = block
+      //     min = block.id
+      //   }
+      // }
+      // console.log({blocks, min, atMin, max, atMax})
     },
     createWebGLMap (blocks) {
       var camera, scene, renderer, controls, mouseIsDown = false
+      // var pickingData, pickingRenderTarget, pickingScene
+      var clock = new THREE.Clock()
+      var mesh
+      var pickingRenderTarget
+      // var pickingScene
+      // var highlightBox
+      var pixelBuffer = new Uint8Array(4)
+      var canvas = this.$refs['counties-webgl-canvas']
       const init = () => {
         renderer = new THREE.WebGLRenderer({
-          canvas: this.$refs['counties-webgl-canvas'],
+          canvas: canvas,
           antialias: true,
           alpha: true
         })
@@ -259,23 +307,55 @@ export default {
         // geometry
         document.addEventListener('keydown', e => {
           if (e.key == '=') {
-            camera.position.z -= 10
-            render()
+            camera.position.z -= 50
+            render(clock.getDelta())
           } else if (e.key == '-') {
-            camera.position.z += 10
-            render()
+            camera.position.z += 50
+            render(clock.getDelta())
           }
         })
+
+
+// pickingScene = new THREE.Scene()
+// pickingData = {}
+// picking render target
+pickingRenderTarget = new THREE.WebGLRenderTarget(
+  this.canvasWidth, this.canvasHeight
+)
+pickingRenderTarget.texture.generateMipmaps = false
+pickingRenderTarget.texture.minFilter = THREE.NearestFilter
+
+// // highlight box
+// highlightBox = new THREE.Mesh(
+//   new THREE.BoxBufferGeometry( 1, 1, 1 ),
+//   new THREE.MeshLambertMaterial( {
+//     emissive: 0xffff00,
+//     transparent: true,
+//     opacity: 0.5
+//   } )
+// )
+
+// var pickingMaterial = new THREE.RawShaderMaterial( {
+// 				vertexShader: "#define PICKING\n" + this.vertexShader,
+// 				fragmentShader: "#define PICKING\n" + this.fragmentShader,
+// 				uniforms: {
+// 					// pickingColor: {
+// 					// 	value: new THREE.Color()
+// 					// }
+// 				}
+//       } );
+// var debug = new
 
         var instances = blocks.length
         var countyIndexes = []
         var offsets = []
         var uvOffsets = []
         var uvScales = []
-        // let i = 0
+        let i = 0
         for (let block of blocks) {
-          // countyIndexes.push(i)
-          countyIndexes.push(block.id)
+          i++
+          countyIndexes.push(i)
+          // countyIndexes.push(block.id)
           offsets.push( 
             block.x - 650 + block.w/2,
             -block.y + 380 - block.h/2,
@@ -289,7 +369,6 @@ export default {
             block.w / 1024,
             block.h / 1024
           )
-          // i++
         }
 
         var geometry = new THREE.InstancedBufferGeometry()
@@ -309,7 +388,8 @@ export default {
           uniforms: {
             map: { value: canvasTexture },
             time: { value: 1.0 },
-            sineTime: { value: 1.0 }
+            sineTime: { value: 1.0 },
+            isPicking: { type: 'f', value: 0.0 }
           },
           vertexShader: this.vertexShader,
           fragmentShader: this.fragmentShader,
@@ -320,7 +400,7 @@ export default {
 
         //
 
-        var mesh = new THREE.Mesh( geometry, material );
+        mesh = new THREE.Mesh( geometry, material );
         scene.add( mesh );
 
         window.addEventListener( 'resize', onWindowResize, false );
@@ -332,12 +412,24 @@ export default {
         // window.addEventListener( 'touchend', () => this.inactivityTimeout = TIMEOUT, false )
         // window.addEventListener( 'mouseup', () => this.inactivityTimeout = TIMEOUT, false )
         // window.addEventListener( 'mouseout', () => this.inactivityTimeout = TIMEOUT, false )
-        window.addEventListener( 'touchstart', () => mouseIsDown = true, false )
-        window.addEventListener( 'mousedown', () => mouseIsDown = true, false )
-        window.addEventListener( 'touchcancel', () => mouseIsDown = false, false )
-        window.addEventListener( 'touchend', () => mouseIsDown = false, false )
-        window.addEventListener( 'mouseup', () => mouseIsDown = false, false )
-        window.addEventListener( 'mouseout', () => mouseIsDown = false, false )
+        canvas.addEventListener( 'touchstart', () => mouseIsDown = true, false )
+        canvas.addEventListener( 'mousedown', (event) => {
+          mouseIsDown = true,
+          // var xScrollPos = canvas.scrollLeft
+          // var yScrollPos = canvas.scrollTop
+          this.mouse.x = event.pageX - canvas.offsetLeft
+          this.mouse.y = event.pageY - canvas.offsetTop
+          // console.log('canvas:', canvas)
+          // this.mouse.x = (canvas.offsetLeft - canvas.scrollLeft + canvas.clientLeft)
+          // this.mouse.y = (canvas.offsetTop - canvas.scrollTop + canvas.clientTop)
+          samplePoint()
+
+        }, false )
+        canvas.addEventListener( 'touchcancel', () => mouseIsDown = false, false )
+        canvas.addEventListener( 'touchend', () => mouseIsDown = false, false )
+        canvas.addEventListener( 'mouseup', () => mouseIsDown = false, false )
+        canvas.addEventListener( 'mouseout', () => mouseIsDown = false, false )
+
 
       }
 
@@ -348,28 +440,67 @@ export default {
         camera.updateProjectionMatrix();
 
         renderer.setSize( this.canvasWidth, this.canvasHeight );
-        render()
+        render(clock.getDelta())
       }
 
       const animate = () => {
         requestAnimationFrame( animate );
-        // this.inactivityTimeout -= 1
-        // if (this.inactivityTimeout > 0) {
+        var time = clock.getDelta()
         if (mouseIsDown) {
-          render()
+          render(time)
         }
       }
 
-      const render = () => {
-        var time = performance.now();
+      const render = (time) => {
+        // console.log(elapsedTime)
         var object = scene.children[ 0 ];
-        object.material.uniforms.time.value = time * 0.005;
+        object.material.uniforms.time.value = object.material.uniforms.time.value + time * 1
+        // object.material.uniforms.time.value = time * 0.005;
         renderer.render( scene, camera );
+      }
+
+      const samplePoint = () => {
+        // console.log('Sample point', this.mouse.x, this.mouse.y)
+        // object.material.uniforms.isPicking.value = 1
+        mesh.material.uniforms.isPicking.value = 1
+        mesh.material.uniforms.isPicking.needsUpdate = true
+        renderer.render( scene, camera, pickingRenderTarget, true)
+        renderer.readRenderTargetPixels(
+          pickingRenderTarget,
+          this.mouse.x,
+          pickingRenderTarget.height - this.mouse.y,
+          1,
+          1,
+          pixelBuffer
+        );
+
+        // interpret the pixel as an ID
+        var id =
+          ( pixelBuffer[ 0 ] << 16 ) |
+          ( pixelBuffer[ 1 ] ) << 8 |
+          ( pixelBuffer[ 2 ] );
+        if (id > 0) {
+          const index = id-1
+          if (!(index in this.counties)) {
+            // eslint-disable-next-line
+            console.log('ERROR!', id)
+          }
+          const code = this.counties[index].id
+          const name = names[code]
+          // eslint-disable-next-line
+          this.currentCounty = 'County of ' + name
+          // eslint-disable-next-line
+          console.log('County of', name, {index, code, mouse:this.mouse})
+        } else {
+          this.currentCounty = null
+        }
+        mesh.material.uniforms.isPicking.value = 0
       }
 
       init()
       animate()
-      render()
+      render(clock.getDelta())
+
     }
   }
 }
@@ -396,7 +527,7 @@ export default {
     width: auto;
     min-height: 40px;
     background: black;
-      cursor: pointer;
+    cursor: pointer;
     path {
       fill: red;
       stroke: none;
@@ -410,9 +541,13 @@ export default {
   .packed-counties-canvas {
     max-width: 960px;
   }
+  .county-label {
+    position: absolute;
+    width: 100%;
+    margin-top: 40px;
+    font-size: 30px;
+  }
   .counties-webgl-canvas {
-    // width: 100%;
-    // max-width: 900px;
     margin: 0 auto;
     height: auto;
   }
