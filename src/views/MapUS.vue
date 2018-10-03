@@ -1,19 +1,20 @@
 <template>
   <div class="map-us">
 
-    US Counties
-    
+    <h1>US Counties</h1>
+    <h4>Gather map data</h4>
+     <p>Following <a href="https://bl.ocks.org/mbostock/4136647">this example</a>,
+    Create a SVG map of {{counties.length.toLocaleString()}} US counties.</p>
     <svg
       ref="map-svg"
       class="map-svg"
-      width="960"
-      heoght="600"
       viewBox="0 0 960 600"
       preserveAspectRatio="xMidYMid meet"></svg>
 
     <hr/>
 
-    Next use <em>getBBox()</em> to get each county bounds
+    <h4>Export Counties One by One</h4>
+    <p> Next use <em>getBBox()</em> to get each county bounds</p>
     <br/>
     <svg
       @click="randomize"
@@ -21,17 +22,23 @@
       class="test-svg"
       preserveAspectRatio="xMidYMid meet"></svg>
     <br/>
-    Click on the SVG to randomize the state
+    <em>Click on the SVG to randomize the state</em>
 
     <hr/>
 
+    <h4>Draw to Canvas</h4>
+    <p>Redraw All {{counties.length.toLocaleString()}} US Counties onto a Canvas, using their coordinates</p>
+    
     <canvas
       class="counties-canvas"
       ref="counties-canvas"
       />
 
     <hr/>
-
+ 
+    <h4>Pack onto Canvas for Texture</h4>
+    <p>Redraw All {{counties.length.toLocaleString()}} US Counties onto a Canvas, using their packed positions</p>
+   
     <canvas
       class="packed-counties-canvas"
       ref="packed-counties-canvas"
@@ -39,6 +46,9 @@
 
     <hr/>
 
+    <h4>Upload to the GPU</h4>
+    <p>Each county is mapped to an instanced 3d plane geometry with the right uv map.</p>
+      
     <canvas
       class="counties-webgl-canvas"
       ref="counties-webgl-canvas"
@@ -59,6 +69,7 @@ const OrbitControls = require('three-orbit-controls')(THREE)
 export default {
   name: 'home',
   data: () => ({
+    scale: 1.345,
         vertexShader: `
       precision highp float;
 
@@ -68,62 +79,61 @@ export default {
       uniform mat4 modelViewMatrix;
       uniform mat4 projectionMatrix;
 
-attribute vec2 uv;
-varying vec2 vUv;
+      attribute vec2 uv;
+      varying vec2 vUv;
 
+      attribute float countyIndex;
       attribute vec3 position;
       attribute vec3 offset;
       attribute vec4 color;
       attribute vec4 orientationStart;
       attribute vec4 orientationEnd;
-
       attribute vec2 uvOffsets;
       attribute vec2 uvScales;
-
-      varying vec3 vPosition;
-      // varying vec4 vColor;
+      // varying vec3 vPosition;
+      varying float vCountyIndex;
 
       void main(){
+        vec3 pos = position * vec3(uvScales.xy * 1024.0, 1.0);
+ vCountyIndex = countyIndex;
+        pos = pos + offset;
+        // vPosition.z += sin(time*0.6 + offset.x + offset.y) * 30.0;
+        vUv = vec2(uv.x, 1.0-uv.y);
+        vUv *= uvScales;
+        vUv = vec2(vUv.x, 1.0-vUv.y);
+        vUv += vec2(uvOffsets.x , uvOffsets.y);// * vec2(1.0,-1.0) * uvScales / 1024.0;
 
-vec3 pos = position * vec3(uvScales.xy, 1.0);//*1024.0;
-
-        // vPosition = offset * max( abs( sineTime * 2.0 + 1.0 ), 0.5 ) + position;
-        // vec4 orientation = normalize( mix( orientationStart, orientationEnd, sineTime ) );
-        // vec3 vcV = cross( orientation.xyz, vPosition );
-        // vPosition = vcV * ( 2.0 * orientation.w ) + ( cross( orientation.xyz, vcV ) * 2.0 + vPosition );
-vPosition = pos + offset;
-vPosition.z += sin(time + length(vPosition.xy)) * 10.0;
-vUv = (uv * uvScales + uvOffsets)  / 1024.0;
-
-
-// vUv += (uv *1024.0 / uvScales)/1024.0;
-
-
-        gl_Position = projectionMatrix * modelViewMatrix * vec4( vPosition, 1.0 );
-
+        gl_Position = projectionMatrix * modelViewMatrix * vec4( pos, 1.0 );
       }
     `,
     fragmentShader: `
       precision highp float;
       uniform float time;
-      varying vec3 vPosition;
-      // varying vec4 vColor;
-uniform sampler2D map;
-varying vec2 vUv;
+      // varying vec3 vPosition;
+      varying float vCountyIndex;
+      uniform sampler2D map;
+      varying vec2 vUv;
       void main() {
         vec4 color = texture2D(map, vUv);
-        // vec4 color = vec4( vColor );
-        // color.r += sin( vPosition.x * 10.0 + time ) * 0.5;
+        if (color.x + color.y + color.z < 0.3) {
+          discard;
+        }
+        color.r = sin(time+vCountyIndex) * 0.5 + 0.5;
+        color.g = sin(time*0.7+vCountyIndex) * 0.5 + 0.5;
+        color.b = sin(time*.43+vCountyIndex) * 0.5 + 0.5;
+
         gl_FragColor = color;
       }
-    `
+    `,
+    counties: [],
+    // inactivityTimeout: 10000,
+    canvasWidth: 960,
+    canvasHeight: 600
   }),
   mounted () {
-
-    const scale = 1.21
     this.createD3Map()
-    const blocks = this.runTexturePacker(scale)
-    this.drawCounties(blocks, scale)
+    const blocks = this.runTexturePacker()
+    this.drawCounties(blocks)
     this.createWebGLMap(blocks)
   },
   methods: {
@@ -148,39 +158,39 @@ varying vec2 vUv;
           .attr('d', path)
       this.randomize()
     },
-    runTexturePacker (scale) {
+    runTexturePacker () {
       const blocks = [...this.$refs['map-svg'].querySelectorAll('g.counties path')]
         .map(path => {
           const { x, y, width, height } = path.getBBox()
           return {
-            x: x * scale,
-            y: y * scale,
-            w: width * scale,
-            h: height * scale,
+            x: x * this.scale,
+            y: y * this.scale,
+            w: width * this.scale,
+            h: height * this.scale,
             path
           }
         })
-        .sort((a, b) => (Math.max(b.w, b.h) - Math.max(a.w, a.h)))
+        .sort((a, b) => (Math.min(b.w, b.h) - Math.min(a.w, a.h)))
 
       const packer = new GrowingPacker()
       packer.fit(blocks)
       return blocks
     },
-    drawCounties (blocks, scale) {
+    drawCounties (blocks) {
       const canvas = this.$refs['counties-canvas']
       canvas.width = 960
       canvas.height = 600
       const context = canvas.getContext('2d')
-      context.strokeStyle = '#00f'
-      context.lineWidth = 1
-      context.fillStyle = '#0f0'
+      context.strokeStyle = '#000'
+      context.lineWidth = 0
+      context.fillStyle = '#000'
 
       const canvasPacked = this.$refs['packed-counties-canvas']
       canvasPacked.width = 1024
       canvasPacked.height = 1024
       const contextPacked = canvasPacked.getContext('2d')
-      contextPacked.strokeStyle = 'red'
-      contextPacked.lineWidth = 1
+      contextPacked.strokeStyle = 'transparent'
+      contextPacked.lineWidth = 0
       // contextPacked.fillStyle = 'white'
 
       let i = 0
@@ -198,33 +208,45 @@ varying vec2 vUv;
           contextPacked.fillStyle = `hsl(${360 * Math.random()}, 50%, 50%)`
           contextPacked.translate(-block.x, -block.y)
           contextPacked.translate(block.fit.x, block.fit.y)
-          contextPacked.scale(scale, scale)
+          contextPacked.scale(this.scale, this.scale)
           contextPacked.stroke(path)
           contextPacked.fill(path)
+
+// contextPacked.fillStyle = `hsl(${360 * Math.random()}, 20%, 20%)`
+//           // const rect = 
+//           contextPacked.strokeStyle="red";
+//           contextPacked.rect(0,0, block.w, block.h)
+          // contextPacked.stroke()
+          // contextPacked.fill()
+
           contextPacked.restore()
 
         } else {
           // eslint-disable-next-line
           console.warn(`Error packing county at ${i}`)
         }
-        i = i + 1
+        i++
       }
+      this.counties.push(...blocks)
+      // console.log({blocks})
     },
     createWebGLMap (blocks) {
 
 
 
-		var camera, scene, renderer, controls;
+		var camera, scene, renderer, controls, mouseIsDown = false;
 
 
 		const init = () => {
   
       renderer = new THREE.WebGLRenderer({
         canvas: this.$refs['counties-webgl-canvas'],
-        antialias: true
+        antialias: true,
+        alpha: true
       });
 			renderer.setPixelRatio( window.devicePixelRatio );
-			renderer.setSize( window.innerWidth, window.innerHeight );
+			renderer.setSize( this.canvasWidth, this.canvasHeight );
+			// renderer.setSize( window.innerWidth, window.innerHeight );
 			// container.appendChild( renderer.domElement );
 
 			if ( renderer.extensions.get( 'ANGLE_instanced_arrays' ) === null ) {
@@ -233,20 +255,17 @@ varying vec2 vUv;
 				return;
 
 			}
-
-
-			// container = document.getElementById( 'container' );
-
-			camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 100000 );
+			// camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 100000 );
+			camera = new THREE.PerspectiveCamera( 50, this.canvasWidth / this.canvasHeight, 1, 100000 );
 			camera.position.z = 1000
 
-			scene = new THREE.Scene();
+			scene = new THREE.Scene()
 
       controls = new OrbitControls(camera)
       // controls = new OrbitControls(camera, renderer.domElement)
-			controls.enableKeys = true;
-			controls.enableZoom = false;
-			controls.maxPolarAngle = Math.PI / 2;
+			controls.enableKeys = true
+			controls.enableZoom = false
+			controls.maxPolarAngle = Math.PI / 2
       // geometry
       document.addEventListener('keydown', e => {
         if (e.key == '=') {
@@ -260,24 +279,27 @@ varying vec2 vUv;
 
 			var instances = blocks.length;
 
-			var offsets = [];
-			var uvOffsets = [];
-			var uvScales = [];
+			var countyIndexes = []
+			var offsets = []
+			var uvOffsets = []
+      var uvScales = []
+      let i = 0
 			for (let block of blocks) {
-
+        countyIndexes.push(i)
         offsets.push( 
-          block.x - 500 + block.w/2,
-          -(block.y - 350 + block.h/2),
+          block.x - 600 + block.w/2,
+          -block.y + 380 - block.h/2,
           0
         )
         uvOffsets.push(
-          block.fit.x,
-          block.fit.y
+          (block.fit.x) / 1024,
+          -(block.fit.y) / 1024
         )
         uvScales.push(
-					block.w,
-					block.h
+          block.w / 1024,
+					block.h / 1024
         )
+        i++
 			}
 
 			var geometry = new THREE.InstancedBufferGeometry()
@@ -285,12 +307,13 @@ varying vec2 vUv;
 	
 			geometry.maxInstancedCount = instances; // set so its initalized for dat.GUI, will be set in first draw otherwise
 
+			geometry.addAttribute( 'countyIndex', new THREE.InstancedBufferAttribute( new Float32Array( countyIndexes ), 1 ) );
 			geometry.addAttribute( 'offset', new THREE.InstancedBufferAttribute( new Float32Array( offsets ), 3 ) );
 			geometry.addAttribute( 'uvOffsets', new THREE.InstancedBufferAttribute( new Float32Array( uvOffsets ), 2 ) );
 			geometry.addAttribute( 'uvScales', new THREE.InstancedBufferAttribute( new Float32Array( uvScales ), 2 ) );
       var canvasTexture = new THREE.CanvasTexture(this.$refs['packed-counties-canvas'])
-      canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
-      canvasTexture.repeat.set(1024, 1024)
+      // canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
+      // canvasTexture.repeat.set(1024, 1024)
 
 			var material = new THREE.RawShaderMaterial( {
 				uniforms: {
@@ -313,23 +336,40 @@ varying vec2 vUv;
 			scene.add( mesh );
 
 			window.addEventListener( 'resize', onWindowResize, false );
+      // const TIMEOUT = 10000
+      // this.inactivityTimeout = TIMEOUT
+      // window.addEventListener( 'touchstart', () => this.inactivityTimeout = TIMEOUT, false )
+			// window.addEventListener( 'mousedown', () => this.inactivityTimeout = TIMEOUT, false )
+			// window.addEventListener( 'touchcancel', () => this.inactivityTimeout = TIMEOUT, false )
+			// window.addEventListener( 'touchend', () => this.inactivityTimeout = TIMEOUT, false )
+			// window.addEventListener( 'mouseup', () => this.inactivityTimeout = TIMEOUT, false )
+			// window.addEventListener( 'mouseout', () => this.inactivityTimeout = TIMEOUT, false )
+			window.addEventListener( 'touchstart', () => mouseIsDown = true, false )
+			window.addEventListener( 'mousedown', () => mouseIsDown = true, false )
+			window.addEventListener( 'touchcancel', () => mouseIsDown = false, false )
+			window.addEventListener( 'touchend', () => mouseIsDown = false, false )
+			window.addEventListener( 'mouseup', () => mouseIsDown = false, false )
+			window.addEventListener( 'mouseout', () => mouseIsDown = false, false )
 
 		}
 
 		const onWindowResize = () => {
 
-			camera.aspect = window.innerWidth / window.innerHeight;
+			camera.aspect = this.canvasWidth / this.canvasHeight;
+			// camera.aspect = window.innerWidth / window.innerHeight;
 			camera.updateProjectionMatrix();
 
-			renderer.setSize( window.innerWidth, window.innerHeight );
-render()
+			renderer.setSize( this.canvasWidth, this.canvasHeight );
+      render()
 		}
 
 		const animate = () => {
-
 			requestAnimationFrame( animate );
-
-			render();
+      // this.inactivityTimeout -= 1
+      // if (this.inactivityTimeout > 0) {
+      if (mouseIsDown) {
+        render()
+      }
 		}
 
 		const render = () => {
@@ -349,7 +389,7 @@ render()
 
 		init()
     animate()
-    
+    render()
     }
   }
 }
@@ -358,29 +398,43 @@ render()
 <style lang="scss">
 .map-us {
   .map-svg {
-    width: 100%;
+    width: auto;
+    max-width: 960px;
     path {
+      cursor: pointer;
       fill: rgba(255,255,255,0.6);
       stroke: black;
-      stroke-width: 0.1px;
+      stroke-width: 0.2px;
+      transition: fill ease 1000ms;
+      &:hover {
+        transition: fill ease 20ms;
+        fill: rgba(25,25,255,0.9);
+      }
     }
   }
   .test-svg {
     width: auto;
     min-height: 40px;
-    // border: 1px solid black;
     background: black;
+      cursor: pointer;
     path {
       fill: red;
       stroke: none;
       stroke-width: 0;
     }
   }
-  .counties-canvas{
-    max-width: 100%;
+  .counties-canvas {
+    max-width: 960px;
+    width: auto;
   }
-  .packed-counties-canvas{
-    max-width: 100%;
+  .packed-counties-canvas {
+    max-width: 960px;
+  }
+  .counties-webgl-canvas {
+    // width: 100%;
+    // max-width: 900px;
+    margin: 0 auto;
+    height: auto;
   }
 }
 </style>
