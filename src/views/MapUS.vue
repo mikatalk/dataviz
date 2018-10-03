@@ -3,7 +3,7 @@
 
     <h1>US Counties</h1>
     <h4>Gather map data</h4>
-     <p>Following <a href="https://bl.ocks.org/mbostock/4136647">this example</a>,
+     <p>Following <a href="https://bl.ocks.org/mbostock/4136647">this D3 example</a>,
     Create a SVG map of {{counties.length.toLocaleString()}} US counties.</p>
     <svg
       ref="map-svg"
@@ -97,7 +97,7 @@ export default {
         vec3 pos = position * vec3(uvScales.xy * 1024.0, 1.0);
  vCountyIndex = countyIndex;
         pos = pos + offset;
-        // vPosition.z += sin(time*0.6 + offset.x + offset.y) * 30.0;
+        // pos.z += sin(time*0.6 + offset.x + offset.y) * 30.0;
         vUv = vec2(uv.x, 1.0-uv.y);
         vUv *= uvScales;
         vUv = vec2(vUv.x, 1.0-vUv.y);
@@ -115,7 +115,7 @@ export default {
       varying vec2 vUv;
       void main() {
         vec4 color = texture2D(map, vUv);
-        if (color.x + color.y + color.z < 0.3) {
+        if (color.x + color.y + color.z < 0.9) {
           discard;
         }
         color.r = sin(time+vCountyIndex) * 0.5 + 0.5;
@@ -163,6 +163,7 @@ export default {
         .map(path => {
           const { x, y, width, height } = path.getBBox()
           return {
+            id: parseInt(path.getAttribute('id')),
             x: x * this.scale,
             y: y * this.scale,
             w: width * this.scale,
@@ -231,165 +232,144 @@ export default {
       // console.log({blocks})
     },
     createWebGLMap (blocks) {
-
-
-
-		var camera, scene, renderer, controls, mouseIsDown = false;
-
-
-		const init = () => {
-  
-      renderer = new THREE.WebGLRenderer({
-        canvas: this.$refs['counties-webgl-canvas'],
-        antialias: true,
-        alpha: true
-      });
-			renderer.setPixelRatio( window.devicePixelRatio );
-			renderer.setSize( this.canvasWidth, this.canvasHeight );
-			// renderer.setSize( window.innerWidth, window.innerHeight );
-			// container.appendChild( renderer.domElement );
-
-			if ( renderer.extensions.get( 'ANGLE_instanced_arrays' ) === null ) {
-
-				document.getElementById( 'notSupported' ).style.display = '';
-				return;
-
-			}
-			// camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 100000 );
-			camera = new THREE.PerspectiveCamera( 50, this.canvasWidth / this.canvasHeight, 1, 100000 );
-			camera.position.z = 1000
-
-			scene = new THREE.Scene()
-
-      controls = new OrbitControls(camera)
-      // controls = new OrbitControls(camera, renderer.domElement)
-			controls.enableKeys = true
-			controls.enableZoom = false
-			controls.maxPolarAngle = Math.PI / 2
-      // geometry
-      document.addEventListener('keydown', e => {
-        if (e.key == '=') {
-					camera.position.z -= 10
-					render()
-        } else if (e.key == '-') {
-					camera.position.z += 10
-					render()
+      var camera, scene, renderer, controls, mouseIsDown = false
+      const init = () => {
+        renderer = new THREE.WebGLRenderer({
+          canvas: this.$refs['counties-webgl-canvas'],
+          antialias: true,
+          alpha: true
+        })
+        renderer.setPixelRatio( window.devicePixelRatio )
+        renderer.setSize( this.canvasWidth, this.canvasHeight )
+        if ( renderer.extensions.get( 'ANGLE_instanced_arrays' ) === null ) {
+          alert("This experiment is not supoprted by your browser.")
+          return
         }
-      })
+        // camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 100000 );
+        camera = new THREE.PerspectiveCamera( 50, this.canvasWidth / this.canvasHeight, 1, 100000 );
+        camera.position.z = 1000
 
-			var instances = blocks.length;
+        scene = new THREE.Scene()
 
-			var countyIndexes = []
-			var offsets = []
-			var uvOffsets = []
-      var uvScales = []
-      let i = 0
-			for (let block of blocks) {
-        countyIndexes.push(i)
-        offsets.push( 
-          block.x - 600 + block.w/2,
-          -block.y + 380 - block.h/2,
-          0
-        )
-        uvOffsets.push(
-          (block.fit.x) / 1024,
-          -(block.fit.y) / 1024
-        )
-        uvScales.push(
-          block.w / 1024,
-					block.h / 1024
-        )
-        i++
-			}
+        controls = new OrbitControls(camera)
+        // controls = new OrbitControls(camera, renderer.domElement)
+        controls.enableKeys = true
+        controls.enableZoom = false
+        controls.maxPolarAngle = Math.PI / 2
+        // geometry
+        document.addEventListener('keydown', e => {
+          if (e.key == '=') {
+            camera.position.z -= 10
+            render()
+          } else if (e.key == '-') {
+            camera.position.z += 10
+            render()
+          }
+        })
 
-			var geometry = new THREE.InstancedBufferGeometry()
-			geometry.copy( new THREE.PlaneBufferGeometry(1, 1, 1, 1))
-	
-			geometry.maxInstancedCount = instances; // set so its initalized for dat.GUI, will be set in first draw otherwise
+        var instances = blocks.length
+        var countyIndexes = []
+        var offsets = []
+        var uvOffsets = []
+        var uvScales = []
+        // let i = 0
+        for (let block of blocks) {
+          // countyIndexes.push(i)
+          countyIndexes.push(block.id)
+          offsets.push( 
+            block.x - 650 + block.w/2,
+            -block.y + 380 - block.h/2,
+            0
+          )
+          uvOffsets.push(
+            (block.fit.x) / 1024,
+            -(block.fit.y) / 1024
+          )
+          uvScales.push(
+            block.w / 1024,
+            block.h / 1024
+          )
+          // i++
+        }
 
-			geometry.addAttribute( 'countyIndex', new THREE.InstancedBufferAttribute( new Float32Array( countyIndexes ), 1 ) );
-			geometry.addAttribute( 'offset', new THREE.InstancedBufferAttribute( new Float32Array( offsets ), 3 ) );
-			geometry.addAttribute( 'uvOffsets', new THREE.InstancedBufferAttribute( new Float32Array( uvOffsets ), 2 ) );
-			geometry.addAttribute( 'uvScales', new THREE.InstancedBufferAttribute( new Float32Array( uvScales ), 2 ) );
-      var canvasTexture = new THREE.CanvasTexture(this.$refs['packed-counties-canvas'])
-      // canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
-      // canvasTexture.repeat.set(1024, 1024)
+        var geometry = new THREE.InstancedBufferGeometry()
+        geometry.copy( new THREE.PlaneBufferGeometry(1, 1, 1, 1))
+    
+        geometry.maxInstancedCount = instances; // set so its initalized for dat.GUI, will be set in first draw otherwise
 
-			var material = new THREE.RawShaderMaterial( {
-				uniforms: {
-          map: { value: canvasTexture },
-					time: { value: 1.0 },
-					sineTime: { value: 1.0 }
-				},
-				vertexShader: this.vertexShader,
-				fragmentShader: this.fragmentShader,
-				side: THREE.FrontSide,
-				// side: THREE.DoubleSide,
-        transparent: true,
-        alphaTest: 0.01
+        geometry.addAttribute( 'countyIndex', new THREE.InstancedBufferAttribute( new Float32Array( countyIndexes ), 1 ) );
+        geometry.addAttribute( 'offset', new THREE.InstancedBufferAttribute( new Float32Array( offsets ), 3 ) );
+        geometry.addAttribute( 'uvOffsets', new THREE.InstancedBufferAttribute( new Float32Array( uvOffsets ), 2 ) );
+        geometry.addAttribute( 'uvScales', new THREE.InstancedBufferAttribute( new Float32Array( uvScales ), 2 ) );
+        var canvasTexture = new THREE.CanvasTexture(this.$refs['packed-counties-canvas'])
+        // canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
+        // canvasTexture.repeat.set(1024, 1024)
 
-			} );
+        var material = new THREE.RawShaderMaterial( {
+          uniforms: {
+            map: { value: canvasTexture },
+            time: { value: 1.0 },
+            sineTime: { value: 1.0 }
+          },
+          vertexShader: this.vertexShader,
+          fragmentShader: this.fragmentShader,
+          side: THREE.FrontSide,
+          // side: THREE.DoubleSide,
+          transparent: true
+        } );
 
-			//
+        //
 
-			var mesh = new THREE.Mesh( geometry, material );
-			scene.add( mesh );
+        var mesh = new THREE.Mesh( geometry, material );
+        scene.add( mesh );
 
-			window.addEventListener( 'resize', onWindowResize, false );
-      // const TIMEOUT = 10000
-      // this.inactivityTimeout = TIMEOUT
-      // window.addEventListener( 'touchstart', () => this.inactivityTimeout = TIMEOUT, false )
-			// window.addEventListener( 'mousedown', () => this.inactivityTimeout = TIMEOUT, false )
-			// window.addEventListener( 'touchcancel', () => this.inactivityTimeout = TIMEOUT, false )
-			// window.addEventListener( 'touchend', () => this.inactivityTimeout = TIMEOUT, false )
-			// window.addEventListener( 'mouseup', () => this.inactivityTimeout = TIMEOUT, false )
-			// window.addEventListener( 'mouseout', () => this.inactivityTimeout = TIMEOUT, false )
-			window.addEventListener( 'touchstart', () => mouseIsDown = true, false )
-			window.addEventListener( 'mousedown', () => mouseIsDown = true, false )
-			window.addEventListener( 'touchcancel', () => mouseIsDown = false, false )
-			window.addEventListener( 'touchend', () => mouseIsDown = false, false )
-			window.addEventListener( 'mouseup', () => mouseIsDown = false, false )
-			window.addEventListener( 'mouseout', () => mouseIsDown = false, false )
+        window.addEventListener( 'resize', onWindowResize, false );
+        // const TIMEOUT = 10000
+        // this.inactivityTimeout = TIMEOUT
+        // window.addEventListener( 'touchstart', () => this.inactivityTimeout = TIMEOUT, false )
+        // window.addEventListener( 'mousedown', () => this.inactivityTimeout = TIMEOUT, false )
+        // window.addEventListener( 'touchcancel', () => this.inactivityTimeout = TIMEOUT, false )
+        // window.addEventListener( 'touchend', () => this.inactivityTimeout = TIMEOUT, false )
+        // window.addEventListener( 'mouseup', () => this.inactivityTimeout = TIMEOUT, false )
+        // window.addEventListener( 'mouseout', () => this.inactivityTimeout = TIMEOUT, false )
+        window.addEventListener( 'touchstart', () => mouseIsDown = true, false )
+        window.addEventListener( 'mousedown', () => mouseIsDown = true, false )
+        window.addEventListener( 'touchcancel', () => mouseIsDown = false, false )
+        window.addEventListener( 'touchend', () => mouseIsDown = false, false )
+        window.addEventListener( 'mouseup', () => mouseIsDown = false, false )
+        window.addEventListener( 'mouseout', () => mouseIsDown = false, false )
 
-		}
+      }
 
-		const onWindowResize = () => {
+      const onWindowResize = () => {
 
-			camera.aspect = this.canvasWidth / this.canvasHeight;
-			// camera.aspect = window.innerWidth / window.innerHeight;
-			camera.updateProjectionMatrix();
+        camera.aspect = this.canvasWidth / this.canvasHeight;
+        // camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
 
-			renderer.setSize( this.canvasWidth, this.canvasHeight );
-      render()
-		}
-
-		const animate = () => {
-			requestAnimationFrame( animate );
-      // this.inactivityTimeout -= 1
-      // if (this.inactivityTimeout > 0) {
-      if (mouseIsDown) {
+        renderer.setSize( this.canvasWidth, this.canvasHeight );
         render()
       }
-		}
 
-		const render = () => {
+      const animate = () => {
+        requestAnimationFrame( animate );
+        // this.inactivityTimeout -= 1
+        // if (this.inactivityTimeout > 0) {
+        if (mouseIsDown) {
+          render()
+        }
+      }
 
-			var time = performance.now();
+      const render = () => {
+        var time = performance.now();
+        var object = scene.children[ 0 ];
+        object.material.uniforms.time.value = time * 0.005;
+        renderer.render( scene, camera );
+      }
 
-			var object = scene.children[ 0 ];
-
-			// object.rotation.y = time * 0.0005;
-			object.material.uniforms.time.value = time * 0.005;
-			// object.material.uniforms.sineTime.value = Math.sin( object.material.uniforms.time.value * 0.05 );
-
-			renderer.render( scene, camera );
-
-    }
-    
-
-		init()
-    animate()
-    render()
+      init()
+      animate()
+      render()
     }
   }
 }
@@ -402,13 +382,13 @@ export default {
     max-width: 960px;
     path {
       cursor: pointer;
-      fill: rgba(255,255,255,0.6);
+      fill: rgba(255,255,255,0.0);
       stroke: black;
       stroke-width: 0.2px;
-      transition: fill ease 1000ms;
+      transition: fill ease 300ms;
       &:hover {
         transition: fill ease 20ms;
-        fill: rgba(25,25,255,0.9);
+        fill: rgba(25,25,25,0.3);
       }
     }
   }
