@@ -48,7 +48,7 @@
 
     <h4>Upload to the GPU</h4>
     <p>Each county is mapped to an instanced 3d plane geometry with the right uv map.</p>
-    <h4 class="county-label">{{currentCounty}}</h4>
+    <h4 class="county-label">County of {{currentCounty}}</h4>
     <canvas
       class="counties-webgl-canvas"
       ref="counties-webgl-canvas"
@@ -83,7 +83,10 @@ export default {
       attribute vec2 uv;
       varying vec2 vUv;
 
+      attribute float ratio;
+      varying float vRatio;
       attribute float countyIndex;
+      attribute vec4 countyTag;
       attribute vec3 position;
       attribute vec3 offset;
       attribute vec4 color;
@@ -91,57 +94,43 @@ export default {
       attribute vec4 orientationEnd;
       attribute vec2 uvOffsets;
       attribute vec2 uvScales;
-      // varying vec3 vPosition;
-      varying float vCountyIndex;
+      varying vec4 vCountyTag;
 
       void main(){
-        vCountyIndex = countyIndex;
+        vCountyTag = countyTag;
         vec3 pos = position * vec3(uvScales.xy * 1024.0, 1.0);
-        // pos *= (sin(time*0.6 + offset.x + offset.y) * 2.0)-1.0;
         pos = pos + offset;
-        // pos.z += sin(time*0.6 + offset.x + offset.y) * 30.0;
         
         vUv = vec2(uv.x, 1.0-uv.y);
         vUv *= uvScales;
         vUv = vec2(vUv.x, 1.0-vUv.y);
-        vUv += vec2(uvOffsets.x , uvOffsets.y);// * vec2(1.0,-1.0) * uvScales / 1024.0;
+        vUv += vec2(uvOffsets.x , uvOffsets.y);
 
+        vRatio = ratio;
         gl_Position = projectionMatrix * modelViewMatrix * vec4( pos, 1.0 );
       }
     `,
     fragmentShader: `
       precision highp float;
       uniform float time;
-      // varying vec3 vPosition;
-      varying float vCountyIndex;
       uniform sampler2D map;
       uniform float isPicking;
       varying vec2 vUv;
-      
-vec4 packInt( float c )
-{	
-  // float alpha = c/(256.0*256.0*256.0) / 256.0;
-  
-  float red = mod(c/(256.0*256.0), 256.0) / 256.0;
-  float green = mod((c/256.0), 256.0) / 256.0;
-  float blue = mod(c, 256.0) / 256.0;
-  return vec4(red, green, blue, 1.0);
-}
-
+      varying float vRatio;
+      varying vec4 vCountyTag;
 
       void main() {
-        vec4 color = texture2D(map, vUv);
+        vec2 uv = vUv;
+        vec4 color = texture2D(map, uv);
         if (color.x + color.y + color.z < 0.9) {
           discard;
         }
         if (isPicking == 1.0) {
-          vec4 c = packInt(vCountyIndex);
-          gl_FragColor = c;
-           //vec4(c);//vec4( 1.0, vCountyIndex, 1.0, 1.0 );
+          gl_FragColor = vCountyTag;
         } else {
-          color.r = sin(time+vCountyIndex) * 0.5 + 0.5;
-          color.g = sin(time*0.7+vCountyIndex) * 0.5 + 0.5;
-          color.b = sin(time*.43+vCountyIndex) * 0.5 + 0.5;
+          color.r = 1.0 - vRatio * 0.7;
+          color.g = 0.5 - vRatio * 0.2;
+          color.b = vRatio * 0.9;
           gl_FragColor = color;
         }
       }
@@ -154,15 +143,29 @@ vec4 packInt( float c )
       x:0,
       y:0
     },
+    lastMouse: {
+      x:-1,
+      y:-1
+    },
     currentCounty: null
   }),
   mounted () {
+    this.gatherData()
     this.createD3Map()
     const blocks = this.runTexturePacker()
-    this.drawCounties(blocks)
-    this.createWebGLMap(blocks)
+    this.counties.push(...blocks)
+    this.drawCounties()
+    this.createWebGLMap()
   },
   methods: {
+    gatherData () {
+      
+      // ).then(({d3:default}) => {
+      // d3.csv('public/CtyxCty_US.csv').then(data => {
+      //   console.log('--', data)
+      // })
+      // })
+    },
     randomize () {
       const paths = this.$refs['map-svg'].querySelectorAll('g.counties path')
       const index = Math.round(Math.random() * paths.length) % paths.length
@@ -173,6 +176,7 @@ vec4 packInt( float c )
       this.$refs['test-svg'].append(paths[index].cloneNode(true))
     },
     createD3Map () {
+      console.log({topojson, us})
       const svg = d3.select(this.$refs['map-svg'])
       const path = d3.geoPath()
       svg.append('g')
@@ -203,7 +207,7 @@ vec4 packInt( float c )
       packer.fit(blocks)
       return blocks
     },
-    drawCounties (blocks) {
+    drawCounties () {
       const canvas = this.$refs['counties-canvas']
       canvas.width = 960
       canvas.height = 600
@@ -218,10 +222,14 @@ vec4 packInt( float c )
       const contextPacked = canvasPacked.getContext('2d')
       contextPacked.strokeStyle = 'transparent'
       contextPacked.lineWidth = 0
-      // contextPacked.fillStyle = 'white'
+      contextPacked.fillStyle = 'transparent'
+      contextPacked.rect(0,0, canvasPacked.width, canvasPacked.height)
+      contextPacked.stroke()
+      contextPacked.fill()
+      contextPacked.fillStyle = 'white'
 
       let i = 0
-      for(let block of blocks) {
+      for(let block of this.counties) {
         if (block.fit) {
 
           const path = new Path2D(block.path.getAttribute('d'))
@@ -232,19 +240,12 @@ vec4 packInt( float c )
           context.restore()
 
           contextPacked.save()
-          contextPacked.fillStyle = `hsl(${360 * Math.random()}, 50%, 50%)`
+          // contextPacked.fillStyle = `hsl(${360 * Math.random()}, 50%, 50%)`
           contextPacked.translate(-block.x, -block.y)
           contextPacked.translate(block.fit.x, block.fit.y)
           contextPacked.scale(this.scale, this.scale)
           contextPacked.stroke(path)
           contextPacked.fill(path)
-
-// contextPacked.fillStyle = `hsl(${360 * Math.random()}, 20%, 20%)`
-//           // const rect = 
-//           contextPacked.strokeStyle="red";
-//           contextPacked.rect(0,0, block.w, block.h)
-          // contextPacked.stroke()
-          // contextPacked.fill()
 
           contextPacked.restore()
 
@@ -254,28 +255,14 @@ vec4 packInt( float c )
         }
         i++
       }
-      this.counties.push(...blocks)
-      // let min = Infinity
-      // let atMin
-      // let max = -Infinity
-      // let atMax
-      // for(let block of blocks) {
-      //   if(block.id > max) {
-      //     atMax = block
-      //     max = block.id
-      //   }
-      //   if(block.id < min) {
-      //     atMin = block
-      //     min = block.id
-      //   }
-      // }
-      // console.log({blocks, min, atMin, max, atMax})
+      
     },
-    createWebGLMap (blocks) {
+    createWebGLMap () {
       var camera, scene, renderer, controls, mouseIsDown = false
       // var pickingData, pickingRenderTarget, pickingScene
       var clock = new THREE.Clock()
       var mesh
+      const RESET_VALUE = 0.5
       var pickingRenderTarget
       // var pickingScene
       // var highlightBox
@@ -315,46 +302,31 @@ vec4 packInt( float c )
           }
         })
 
+        pickingRenderTarget = new THREE.WebGLRenderTarget(
+          this.canvasWidth, this.canvasHeight
+        )
 
-// pickingScene = new THREE.Scene()
-// pickingData = {}
-// picking render target
-pickingRenderTarget = new THREE.WebGLRenderTarget(
-  this.canvasWidth, this.canvasHeight
-)
-pickingRenderTarget.texture.generateMipmaps = false
-pickingRenderTarget.texture.minFilter = THREE.NearestFilter
-
-// // highlight box
-// highlightBox = new THREE.Mesh(
-//   new THREE.BoxBufferGeometry( 1, 1, 1 ),
-//   new THREE.MeshLambertMaterial( {
-//     emissive: 0xffff00,
-//     transparent: true,
-//     opacity: 0.5
-//   } )
-// )
-
-// var pickingMaterial = new THREE.RawShaderMaterial( {
-// 				vertexShader: "#define PICKING\n" + this.vertexShader,
-// 				fragmentShader: "#define PICKING\n" + this.fragmentShader,
-// 				uniforms: {
-// 					// pickingColor: {
-// 					// 	value: new THREE.Color()
-// 					// }
-// 				}
-//       } );
-// var debug = new
-
-        var instances = blocks.length
+        var instances = this.counties.length
+        var ratios = []
         var countyIndexes = []
+        var countyTags = []
         var offsets = []
         var uvOffsets = []
         var uvScales = []
-        let i = 0
-        for (let block of blocks) {
-          i++
+        for (let i = 0, l = this.counties.length; i < l; i++) {
+          const block = this.counties[i]
+        
+          ratios.push(RESET_VALUE)
+
           countyIndexes.push(i)
+
+          countyTags.push(
+            ( (i+1) >> 16 & 255 ) / 255,
+            ( (i+1) >> 8 & 255 ) / 255,
+            ( (i+1) >> 0 & 255 ) / 255,
+            1
+          )
+          // countyIndexes.push(i * 100)
           // countyIndexes.push(block.id)
           offsets.push( 
             block.x - 650 + block.w/2,
@@ -370,20 +342,22 @@ pickingRenderTarget.texture.minFilter = THREE.NearestFilter
             block.h / 1024
           )
         }
+        
+        this.offsets = offsets
 
         var geometry = new THREE.InstancedBufferGeometry()
         geometry.copy( new THREE.PlaneBufferGeometry(1, 1, 1, 1))
     
         geometry.maxInstancedCount = instances; // set so its initalized for dat.GUI, will be set in first draw otherwise
 
+        geometry.addAttribute( 'ratio', new THREE.InstancedBufferAttribute( new Float32Array( ratios ), 1 ) );
         geometry.addAttribute( 'countyIndex', new THREE.InstancedBufferAttribute( new Float32Array( countyIndexes ), 1 ) );
+        geometry.addAttribute( 'countyTag', new THREE.InstancedBufferAttribute( new Float32Array( countyTags ), 4 ) );
         geometry.addAttribute( 'offset', new THREE.InstancedBufferAttribute( new Float32Array( offsets ), 3 ) );
         geometry.addAttribute( 'uvOffsets', new THREE.InstancedBufferAttribute( new Float32Array( uvOffsets ), 2 ) );
         geometry.addAttribute( 'uvScales', new THREE.InstancedBufferAttribute( new Float32Array( uvScales ), 2 ) );
         var canvasTexture = new THREE.CanvasTexture(this.$refs['packed-counties-canvas'])
-        // canvasTexture.wrapS = canvasTexture.wrapT = THREE.RepeatWrapping;
-        // canvasTexture.repeat.set(1024, 1024)
-
+        
         var material = new THREE.RawShaderMaterial( {
           uniforms: {
             map: { value: canvasTexture },
@@ -398,8 +372,6 @@ pickingRenderTarget.texture.minFilter = THREE.NearestFilter
           transparent: true
         } );
 
-        //
-
         mesh = new THREE.Mesh( geometry, material );
         scene.add( mesh );
 
@@ -413,17 +385,17 @@ pickingRenderTarget.texture.minFilter = THREE.NearestFilter
         // window.addEventListener( 'mouseup', () => this.inactivityTimeout = TIMEOUT, false )
         // window.addEventListener( 'mouseout', () => this.inactivityTimeout = TIMEOUT, false )
         canvas.addEventListener( 'touchstart', () => mouseIsDown = true, false )
-        canvas.addEventListener( 'mousedown', (event) => {
-          mouseIsDown = true,
-          // var xScrollPos = canvas.scrollLeft
-          // var yScrollPos = canvas.scrollTop
+        canvas.addEventListener( 'mousedown', () => mouseIsDown = true, false )
+        canvas.addEventListener( 'mousemove', (event) => {
+          mouseIsDown = true
           this.mouse.x = event.pageX - canvas.offsetLeft
           this.mouse.y = event.pageY - canvas.offsetTop
-          // console.log('canvas:', canvas)
-          // this.mouse.x = (canvas.offsetLeft - canvas.scrollLeft + canvas.clientLeft)
-          // this.mouse.y = (canvas.offsetTop - canvas.scrollTop + canvas.clientTop)
+          if (this.lastMouse.x === this.mouse.x && this.lastMouse.y === this.mouse.y) {
+            return
+          }
+          this.lastMouse.x = this.mouse.x
+          this.lastMouse.y = this.mouse.y
           samplePoint()
-
         }, false )
         canvas.addEventListener( 'touchcancel', () => mouseIsDown = false, false )
         canvas.addEventListener( 'touchend', () => mouseIsDown = false, false )
@@ -456,6 +428,11 @@ pickingRenderTarget.texture.minFilter = THREE.NearestFilter
         var object = scene.children[ 0 ];
         object.material.uniforms.time.value = object.material.uniforms.time.value + time * 1
         // object.material.uniforms.time.value = time * 0.005;
+
+
+        // mesh.material.uniforms.isPicking.value = 1
+        // mesh.material.uniforms.isPicking.needsUpdate = true
+        
         renderer.render( scene, camera );
       }
 
@@ -477,24 +454,56 @@ pickingRenderTarget.texture.minFilter = THREE.NearestFilter
         // interpret the pixel as an ID
         var id =
           ( pixelBuffer[ 0 ] << 16 ) |
-          ( pixelBuffer[ 1 ] ) << 8 |
+          ( pixelBuffer[ 1 ] << 8 ) |
           ( pixelBuffer[ 2 ] );
-        if (id > 0) {
-          const index = id-1
-          if (!(index in this.counties)) {
+
+        id -= 1
+
+        // id /= 100;
+        if (id >= 0) {
+          const index = id
+          if (id >= this.counties.length) {
             // eslint-disable-next-line
-            console.log('ERROR!', id)
-          }
+            console.error('ERROR! ---> ', id, '>', this.counties.length, pixelBuffer)
+          } else {
+            // console.log('good ---> ', id, '>', this.counties.length, pixelBuffer)
           const code = this.counties[index].id
           const name = names[code]
-          // eslint-disable-next-line
-          this.currentCounty = 'County of ' + name
-          // eslint-disable-next-line
-          console.log('County of', name, {index, code, mouse:this.mouse})
+
+          if (name !== this.currentCounty) {
+            this.currentCounty = name
+            // eslint-disable-next-line
+            // console.log('County of', name, {id, code, mouse:this.mouse}, this.counties[index])
+            const distance = (x1, y1, x2, y2) => Math.hypot(x2-x1, y2-y1)
+            // update values attributes
+            const {array} = mesh.geometry.attributes.ratio
+            const c1X = this.offsets[id * 3]
+            const c1Y = this.offsets[id * 3 + 1]
+            for (let i = 0, i3 = 0, l = mesh.geometry.attributes.ratio.array.length; i < l; i++, i3+=3) {
+              const c2X = this.offsets[i3]
+              const c2Y = this.offsets[i3+1]
+              array[i] = (Math.sin(distance(c1X + 2500, c1Y + 2500, c2X + 2500, c2Y + 2500) / 250) + 1 ) / 2 
+              
+              array[i] = -1 + 2 * array[i]
+            }
+            mesh.geometry.attributes.ratio.needsUpdate = true
+          }
+          }
+
         } else {
-          this.currentCounty = null
+          // reset
+          if (this.currentCounty !== null) {
+            this.currentCounty = null
+            for (let i = 0, i3 = 0, l = mesh.geometry.attributes.ratio.array.length; i < l; i++, i3+=3) {
+              mesh.geometry.attributes.ratio.array[i] = RESET_VALUE
+              mesh.geometry.attributes.ratio.needsUpdate = true
+            }
+            console.log('GO!')          
+          }
         }
         mesh.material.uniforms.isPicking.value = 0
+
+
       }
 
       init()
@@ -540,6 +549,7 @@ pickingRenderTarget.texture.minFilter = THREE.NearestFilter
   }
   .packed-counties-canvas {
     max-width: 960px;
+    background: #0c0c0c;
   }
   .county-label {
     position: absolute;
