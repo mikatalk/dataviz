@@ -1,14 +1,10 @@
 import Vue from 'vue'
-import App from './App.vue'
-import router from './router'
-import store from './store'
+import Step2 from './Step2.vue'
 
 Vue.config.productionTip = false
 
 new Vue({
-  router,
-  store,
-  render: h => h(App)
+  render: h => h(Step2)
 }).$mount('#app')
 
 
@@ -16,9 +12,13 @@ new Vue({
  * This demo is going to be hosted in iframe and needs to be responsive
  * the map size is 960x600 so the resolution is 600/960 = 0.625
  */
+
+/**
+ * This demo is going to be hosted in iframe and needs to be responsive
+ */
 const handleResize = () => {
   const width = window.innerWidth
-  const height = window.innerWidth * 0.625
+  const height = width * 600 / 960
   try {
     window.parent.postMessage({
       'event-type': 'iframe-content-resize',
