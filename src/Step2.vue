@@ -367,18 +367,33 @@ export default {
 
         window.addEventListener('resize', onWindowResize, false)
         onWindowResize()
-        canvas.addEventListener('touchstart', () => mouseIsDown = true, false )
-        canvas.addEventListener('mousedown', () => mouseIsDown = true, false )
-        canvas.addEventListener('mousemove', (event) => {
-          mouseIsDown = true
-          this.mouse.x = event.pageX - canvas.offsetLeft
-          this.mouse.y = event.pageY - canvas.offsetTop
+        
+        const handleMouseTouchMove = (pageX, pageY) => {
+          this.mouse.x = pageX - canvas.offsetLeft
+          this.mouse.y = pageY - canvas.offsetTop
           if (this.lastMouse.x === this.mouse.x && this.lastMouse.y === this.mouse.y) {
             return
           }
           this.lastMouse.x = this.mouse.x
           this.lastMouse.y = this.mouse.y
           samplePoint()
+        }
+        canvas.addEventListener('touchstart', event => {
+          mouseIsDown = true
+          if (event.changedTouches && event.changedTouches.length) {
+            handleMouseTouchMove(event.changedTouches[0].pageX,  event.changedTouches[0].pageY)
+          }          
+        }, false )
+        canvas.addEventListener('touchmove', event => {
+          mouseIsDown = true
+          if (event.changedTouches && event.changedTouches.length) {
+            handleMouseTouchMove(event.changedTouches[0].pageX,  event.changedTouches[0].pageY)
+          }
+        }, false )
+        canvas.addEventListener('mousedown', () => mouseIsDown = true, false )
+        canvas.addEventListener('mousemove', (event) => {
+          mouseIsDown = true
+          handleMouseTouchMove(event.pageX,  event.pageY)
         }, false )
         canvas.addEventListener('touchcancel', () => mouseIsDown = false, false )
         canvas.addEventListener('touchend', () => mouseIsDown = false, false )
@@ -475,8 +490,6 @@ export default {
           }
         }
         mesh.material.uniforms.isPicking.value = 0
-
-
       }
 
       init()
