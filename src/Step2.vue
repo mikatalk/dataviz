@@ -1,54 +1,60 @@
 <template>
   <div class="map-us">
+    <div class="hide-all">
 
-    <h1>US Counties</h1>
-    <h4>Gather map data</h4>
-     <p>Following <a href="https://bl.ocks.org/mbostock/4136647">this D3 example</a>,
-    Create a SVG map of {{counties.length.toLocaleString()}} US counties.</p>
-    <svg
-      ref="map-svg"
-      class="map-svg"
-      viewBox="0 0 960 600"
-      preserveAspectRatio="xMidYMid meet"></svg>
+      <h1>US Counties</h1>
+      <h4>Gather map data</h4>
+      <p>Following <a href="https://bl.ocks.org/mbostock/4136647">this D3 example</a>,
+      Create a SVG map of {{counties.length.toLocaleString()}} US counties.</p>
+      <svg
+        ref="map-svg"
+        class="map-svg"
+        viewBox="0 0 960 600"
+        preserveAspectRatio="xMidYMid meet"></svg>
 
-    <hr/>
+      <hr/>
 
-    <h4>Export Counties One by One</h4>
-    <p> Next use <em>getBBox()</em> to get each county bounds</p>
-    <br/>
-    <svg
-      @click="randomize"
-      ref="test-svg"
-      class="test-svg"
-      preserveAspectRatio="xMidYMid meet"></svg>
-    <br/>
-    <em>Click on the SVG to randomize the state</em>
+      <h4>Export Counties One by One</h4>
+      <p> Next use <em>getBBox()</em> to get each county bounds</p>
+      <br/>
+      <svg
+        @click="randomize"
+        ref="test-svg"
+        class="test-svg"
+        preserveAspectRatio="xMidYMid meet"></svg>
+      <br/>
+      <em>Click on the SVG to randomize the state</em>
 
-    <hr/>
+      <hr/>
 
-    <h4>Draw to Canvas</h4>
-    <p>Redraw All {{counties.length.toLocaleString()}} US Counties onto a Canvas, using their coordinates</p>
+      <h4>Draw to Canvas</h4>
+      <p>Redraw All {{counties.length.toLocaleString()}} US Counties onto a Canvas, using their coordinates</p>
+      
+      <canvas
+        class="counties-canvas"
+        ref="counties-canvas"
+        />
+
+      <hr/>
+  
+      <h4>Pack onto Canvas for Texture</h4>
+      <p>Redraw All {{counties.length.toLocaleString()}} US Counties onto a Canvas, using their packed positions</p>
     
-    <canvas
-      class="counties-canvas"
-      ref="counties-canvas"
-      />
+      <canvas
+        class="packed-counties-canvas"
+        ref="packed-counties-canvas"
+        />
 
-    <hr/>
- 
-    <h4>Pack onto Canvas for Texture</h4>
-    <p>Redraw All {{counties.length.toLocaleString()}} US Counties onto a Canvas, using their packed positions</p>
-   
-    <canvas
-      class="packed-counties-canvas"
-      ref="packed-counties-canvas"
-      />
+      <hr/>
 
-    <hr/>
-
-    <h4>Upload to the GPU</h4>
-    <p>Each county is mapped to an instanced 3d plane geometry with the right uv map.</p>
-    <h4 class="county-label">County of {{currentCounty}}</h4>
+      <h4>Upload to the GPU</h4>
+      <p>Each county is mapped to an instanced 3d plane geometry with the right uv map.</p>
+    </div>
+    
+    <h4
+      class="county-label"
+      v-html="currentCounty && currentCounty.trim() !== '' ? `County of ${currentCounty}` : 'Roll over a state to activate info'"
+    ></h4>
     <canvas
       class="counties-webgl-canvas"
       ref="counties-webgl-canvas"
@@ -108,7 +114,7 @@ export default {
         vUv += vec2(uvOffsets.x , uvOffsets.y);
 
         vRatio = ratio;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4( pos, 1.0 );
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(pos, 1.0 );
       }
     `,
     fragmentShader: `
@@ -138,8 +144,9 @@ export default {
     `,
     counties: [],
     // inactivityTimeout: 10000,
-    canvasWidth: 960,
-    canvasHeight: 600,
+    // aspectRatio: 1,//600 / 960,
+    canvasWidth: window.innerWidth,
+    canvasHeight: window.innerWidth,
     mouse: {
       x:0,
       y:0
@@ -209,8 +216,8 @@ export default {
     },
     drawCounties () {
       const canvas = this.$refs['counties-canvas']
-      canvas.width = 960
-      canvas.height = 600
+      canvas.width = 600
+      canvas.height = 960
       const context = canvas.getContext('2d')
       context.strokeStyle = '#000'
       context.lineWidth = 0
@@ -258,30 +265,26 @@ export default {
       
     },
     createWebGLMap () {
-      var camera, scene, renderer, controls, mouseIsDown = false
-      // var pickingData, pickingRenderTarget, pickingScene
-      var clock = new THREE.Clock()
-      var mesh
+      let camera, scene, renderer, controls, mouseIsDown = false
+      const clock = new THREE.Clock()
+      let mesh
       const RESET_VALUE = 0.5
-      var pickingRenderTarget
-      // var pickingScene
-      // var highlightBox
-      var pixelBuffer = new Uint8Array(4)
-      var canvas = this.$refs['counties-webgl-canvas']
+      let pickingRenderTarget
+      const pixelBuffer = new Uint8Array(4)
+      const canvas = this.$refs['counties-webgl-canvas']
       const init = () => {
         renderer = new THREE.WebGLRenderer({
           canvas: canvas,
           antialias: true,
           alpha: true
         })
-        renderer.setPixelRatio( window.devicePixelRatio )
-        renderer.setSize( this.canvasWidth, this.canvasHeight )
-        if ( renderer.extensions.get( 'ANGLE_instanced_arrays' ) === null ) {
+        renderer.setPixelRatio(window.devicePixelRatio )
+        renderer.setSize(this.canvasWidth, this.canvasHeight )
+        if (renderer.extensions.get('ANGLE_instanced_arrays' ) === null ) {
           alert("This experiment is not supoprted by your browser.")
           return
         }
-        // camera = new THREE.PerspectiveCamera( 50, window.innerWidth / window.innerHeight, 1, 100000 );
-        camera = new THREE.PerspectiveCamera( 50, this.canvasWidth / this.canvasHeight, 1, 100000 );
+        camera = new THREE.PerspectiveCamera(50, this.canvasWidth / this.canvasHeight, 1, 10000 );
         camera.position.z = 1000
 
         scene = new THREE.Scene()
@@ -289,55 +292,33 @@ export default {
         controls = new MapControls(camera, renderer.domElement)
         controls.enableDamping = true // an animation loop is required when either damping or auto-rotation are enabled
 				controls.dampingFactor = 0.05
-
 				controls.screenSpacePanning = false
-
 				controls.minDistance = 10
 				controls.maxDistance = 2000
-
         controls.maxPolarAngle = Math.PI / 2
-        
-        // controls.enableKeys = true
-        // controls.enableZoom = false
-        // controls.maxPolarAngle = Math.PI / 2
-        // geometry
-        document.addEventListener('keydown', e => {
-          if (e.key == '=') {
-            camera.position.z -= 50
-            render(clock.getDelta())
-          } else if (e.key == '-') {
-            camera.position.z += 50
-            render(clock.getDelta())
-          }
-        })
 
         pickingRenderTarget = new THREE.WebGLRenderTarget(
           this.canvasWidth, this.canvasHeight
         )
 
-        var instances = this.counties.length
-        var ratios = []
-        var countyIndexes = []
-        var countyTags = []
-        var offsets = []
-        var uvOffsets = []
-        var uvScales = []
+        const instances = this.counties.length
+        const ratios = []
+        const countyIndexes = []
+        const countyTags = []
+        const offsets = []
+        const uvOffsets = []
+        const uvScales = []
         for (let i = 0, l = this.counties.length; i < l; i++) {
           const block = this.counties[i]
-        
           ratios.push(RESET_VALUE)
-
           countyIndexes.push(i)
-
           countyTags.push(
-            ( (i+1) >> 16 & 255 ) / 255,
-            ( (i+1) >> 8 & 255 ) / 255,
-            ( (i+1) >> 0 & 255 ) / 255,
+            ((i+1) >> 16 & 255 ) / 255,
+            ((i+1) >> 8 & 255 ) / 255,
+            ((i+1) >> 0 & 255 ) / 255,
             1
           )
-          // countyIndexes.push(i * 100)
-          // countyIndexes.push(block.id)
-          offsets.push( 
+          offsets.push(
             block.x - 650 + block.w/2,
             -block.y + 380 - block.h/2,
             0
@@ -354,20 +335,20 @@ export default {
         
         this.offsets = offsets
 
-        var geometry = new THREE.InstancedBufferGeometry()
-        geometry.copy( new THREE.PlaneBufferGeometry(1, 1, 1, 1))
+        const geometry = new THREE.InstancedBufferGeometry()
+        geometry.copy(new THREE.PlaneBufferGeometry(1, 1, 1, 1))
     
         geometry.maxInstancedCount = instances; // set so its initalized for dat.GUI, will be set in first draw otherwise
 
-        geometry.setAttribute( 'ratio', new THREE.InstancedBufferAttribute( new Float32Array( ratios ), 1 ) );
-        geometry.setAttribute( 'countyIndex', new THREE.InstancedBufferAttribute( new Float32Array( countyIndexes ), 1 ) );
-        geometry.setAttribute( 'countyTag', new THREE.InstancedBufferAttribute( new Float32Array( countyTags ), 4 ) );
-        geometry.setAttribute( 'offset', new THREE.InstancedBufferAttribute( new Float32Array( offsets ), 3 ) );
-        geometry.setAttribute( 'uvOffsets', new THREE.InstancedBufferAttribute( new Float32Array( uvOffsets ), 2 ) );
-        geometry.setAttribute( 'uvScales', new THREE.InstancedBufferAttribute( new Float32Array( uvScales ), 2 ) );
+        geometry.setAttribute('ratio', new THREE.InstancedBufferAttribute(new Float32Array(ratios ), 1 ) );
+        geometry.setAttribute('countyIndex', new THREE.InstancedBufferAttribute(new Float32Array(countyIndexes ), 1 ) );
+        geometry.setAttribute('countyTag', new THREE.InstancedBufferAttribute(new Float32Array(countyTags ), 4 ) );
+        geometry.setAttribute('offset', new THREE.InstancedBufferAttribute(new Float32Array(offsets ), 3 ) );
+        geometry.setAttribute('uvOffsets', new THREE.InstancedBufferAttribute(new Float32Array(uvOffsets ), 2 ) );
+        geometry.setAttribute('uvScales', new THREE.InstancedBufferAttribute(new Float32Array(uvScales ), 2 ) );
         var canvasTexture = new THREE.CanvasTexture(this.$refs['packed-counties-canvas'])
         
-        var material = new THREE.RawShaderMaterial( {
+        var material = new THREE.RawShaderMaterial({
           uniforms: {
             map: { value: canvasTexture },
             time: { value: 1.0 },
@@ -377,26 +358,18 @@ export default {
           vertexShader: this.vertexShader,
           fragmentShader: this.fragmentShader,
           side: THREE.FrontSide,
-          // side: THREE.DoubleSide,
           transparent: true
         } );
 
-        mesh = new THREE.Mesh( geometry, material );
+        mesh = new THREE.Mesh(geometry, material );
         mesh.frustumCulled = false
-        scene.add( mesh );
+        scene.add(mesh );
 
-        window.addEventListener( 'resize', onWindowResize, false );
-        // const TIMEOUT = 10000
-        // this.inactivityTimeout = TIMEOUT
-        // window.addEventListener( 'touchstart', () => this.inactivityTimeout = TIMEOUT, false )
-        // window.addEventListener( 'mousedown', () => this.inactivityTimeout = TIMEOUT, false )
-        // window.addEventListener( 'touchcancel', () => this.inactivityTimeout = TIMEOUT, false )
-        // window.addEventListener( 'touchend', () => this.inactivityTimeout = TIMEOUT, false )
-        // window.addEventListener( 'mouseup', () => this.inactivityTimeout = TIMEOUT, false )
-        // window.addEventListener( 'mouseout', () => this.inactivityTimeout = TIMEOUT, false )
-        canvas.addEventListener( 'touchstart', () => mouseIsDown = true, false )
-        canvas.addEventListener( 'mousedown', () => mouseIsDown = true, false )
-        canvas.addEventListener( 'mousemove', (event) => {
+        window.addEventListener('resize', onWindowResize, false)
+        onWindowResize()
+        canvas.addEventListener('touchstart', () => mouseIsDown = true, false )
+        canvas.addEventListener('mousedown', () => mouseIsDown = true, false )
+        canvas.addEventListener('mousemove', (event) => {
           mouseIsDown = true
           this.mouse.x = event.pageX - canvas.offsetLeft
           this.mouse.y = event.pageY - canvas.offsetTop
@@ -407,26 +380,26 @@ export default {
           this.lastMouse.y = this.mouse.y
           samplePoint()
         }, false )
-        canvas.addEventListener( 'touchcancel', () => mouseIsDown = false, false )
-        canvas.addEventListener( 'touchend', () => mouseIsDown = false, false )
-        canvas.addEventListener( 'mouseup', () => mouseIsDown = false, false )
-        canvas.addEventListener( 'mouseout', () => mouseIsDown = false, false )
-
-
+        canvas.addEventListener('touchcancel', () => mouseIsDown = false, false )
+        canvas.addEventListener('touchend', () => mouseIsDown = false, false )
+        canvas.addEventListener('mouseup', () => mouseIsDown = false, false )
+        canvas.addEventListener('mouseout', () => mouseIsDown = false, false )
       }
 
       const onWindowResize = () => {
-
-        camera.aspect = this.canvasWidth / this.canvasHeight;
-        // camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-
-        renderer.setSize( this.canvasWidth, this.canvasHeight );
+        this.canvasWidth = window.innerWidth
+        this.canvasHeight = window.innerHeight
+        canvas.width = this.canvasWidth
+        canvas.height = this.canvasHeight
+        camera.aspect = this.canvasWidth / this.canvasHeight
+        camera.updateProjectionMatrix()
+        renderer.setSize(this.canvasWidth, this.canvasHeight)
+        pickingRenderTarget.setSize(this.canvasWidth, this.canvasHeight)
         render(clock.getDelta())
       }
 
       const animate = () => {
-        requestAnimationFrame( animate );
+        requestAnimationFrame(animate );
         var time = clock.getDelta()
         controls.update()
         if (mouseIsDown) {
@@ -459,9 +432,9 @@ export default {
 
         // interpret the pixel as an ID
         var id =
-          ( pixelBuffer[ 0 ] << 16 ) |
-          ( pixelBuffer[ 1 ] << 8 ) |
-          ( pixelBuffer[ 2 ] );
+          (pixelBuffer[ 0 ] << 16 ) |
+          (pixelBuffer[ 1 ] << 8 ) |
+          (pixelBuffer[ 2 ] );
 
         id -= 1
 
@@ -475,7 +448,6 @@ export default {
 
           if (name !== this.currentCounty) {
             this.currentCounty = name
-            // console.log('County of', name, {id, code, mouse:this.mouse}, this.counties[index])
             const distance = (x1, y1, x2, y2) => Math.hypot(x2-x1, y2-y1)
             // update values attributes
             const {array} = mesh.geometry.attributes.ratio
@@ -484,8 +456,9 @@ export default {
             for (let i = 0, i3 = 0, l = mesh.geometry.attributes.ratio.array.length; i < l; i++, i3+=3) {
               const c2X = this.offsets[i3]
               const c2Y = this.offsets[i3+1]
+              // for this demo, the color varies by distance  
+              // between the current county and the instanced county
               array[i] = (Math.sin(distance(c1X + 2500, c1Y + 2500, c2X + 2500, c2Y + 2500) / 250) + 1 ) / 2 
-              
               array[i] = -1 + 2 * array[i]
             }
             mesh.geometry.attributes.ratio.needsUpdate = true
@@ -516,50 +489,45 @@ export default {
 </script>
 
 <style lang="scss">
-.map-us {
-  .map-svg {
-    width: auto;
-    max-width: 960px;
-    path {
-      cursor: pointer;
-      fill: rgba(255,255,255,0.0);
-      stroke: black;
-      stroke-width: 0.2px;
-      transition: fill ease 300ms;
-      &:hover {
-        transition: fill ease 20ms;
-        fill: rgba(25,25,25,0.3);
-      }
+body {
+  background: white;
+  margin: 0;
+  overflow: hidden;
+  width: 100vw;
+  height: 100vh;
+  .map-us {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    .hide-all {
+      // everything else but the 3d canvas for the demo
+      visibility: hidden;
+      opacity: 0;
+      width: 0;
+      height: 0;
+      overflow: hidden;
     }
-  }
-  .test-svg {
-    width: auto;
-    min-height: 40px;
-    background: black;
-    cursor: pointer;
-    path {
-      fill: red;
-      stroke: none;
-      stroke-width: 0;
+    
+    canvas.counties-webgl-canvas {
+      width: 100vw;
+      height: auto;
     }
-  }
-  .counties-canvas {
-    max-width: 960px;
-    width: auto;
-  }
-  .packed-counties-canvas {
-    max-width: 960px;
-    background: #0c0c0c;
-  }
-  .county-label {
-    position: absolute;
-    width: 100%;
-    margin-top: 40px;
-    font-size: 30px;
-  }
-  .counties-webgl-canvas {
-    margin: 0 auto;
-    height: auto;
+    
+    .county-label {
+      z-index: 10;
+      color: black;
+      display: flex;
+      position: fixed;
+      font-family: monospace;
+      font-size: 20px;
+      pointer-events: none;
+      user-select: none;
+      padding: 2px 5px;
+      margin: 0 auto;
+      margin-top: 20px;
+      background: rgba(white, 0.85);
+    }
+    
   }
 }
 </style>
